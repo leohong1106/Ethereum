@@ -1,0 +1,19 @@
+<!-- 월요일 다시 -->
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <script src="https://cdn.jsdelivr.net/gh/ethereum/web3.js/dist/web3.min.js"></script>
+    <script>
+        var web3 = require('web3');
+        web3 = new Web3(new Web3.providers.HttpProvider("http://localhost:8545"));
+
+        //접속 여부를 확인
+        console.log(web3.isConnected())
+
+    </script>
+</head>
+<body>
+
+</body>
+</html>
