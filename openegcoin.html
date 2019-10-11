@@ -1,0 +1,147 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<script src="https://cdn.jsdelivr.net/gh/ethereum/web3.js@0.20.6/dist/web3.js"></script>	
+	<script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
+	<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
+	<link href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" rel="stylesheet">
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
+	<link href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css" rel="stylesheet">
+</head>
+<body>
+	<div class="container">
+		<div class="row">
+			<h1>OpenEgCoin</h1>
+		</div>
+		<div class="row">
+			<table class="table table-striped">
+			<thead class="thread-dark">
+			<tr>
+				<th scope="col">계정</th>
+				<th scope="col">코인</th>
+				<th scope="col">블랙리스트 여부</th>
+				<th scope="col">캐쉬백 요율</th>
+			</tr>
+			</thead>
+			<tbody id="board">
+			</tbody></table>
+		</div>
+		<div class="row">
+		</div>
+	</div>
+
+	<script>
+		var Web3 = require("web3");
+		web3 = new Web3(new Web3.providers.HttpProvider("http://localhost:8545"));
+
+		//	Remix > Compilation Details에 abi와 배포된 계약 주소를 추출
+		var openegcoinContract = web3.eth.contract(ABI_ARRAY_STRING);
+		var oc = openegcoinContract.at("CONTRACT_ADDRESS");
+
+		console.log(oc.decimals.call());
+		console.log(oc.name.call());
+
+		function showStatus() {
+			$('#board').empty();
+			
+			let accounts = web3.eth.accounts;
+			accounts.forEach(account => {
+				let balanceOf = oc.balanceOf(account);
+				let isBlacklist = oc.blacklist(account);
+				let cashbackRate = oc.cashbackRate(account);
+			
+				let blacklist = '';
+				if (isBlacklist) {
+					blacklist = `<input type="button" value="블랙리스트 해제" account="${account}" class="btn btn-sm btn-secondary">`;
+				} else {
+					blacklist = `<input type="button" value="블랙리스트 설정" account="${account}" class="btn btn-sm btn-primary">`;
+				}
+
+				let cashback = `
+					<input type="number" account="${account}" value="${cashbackRate}">
+					<input type="button" account="${account}" value="변경">		
+				`;
+
+				let tr = `
+					<tr>
+						<td>${account}</td>
+						<td>${balanceOf}</td>
+						<td>${blacklist}</td>
+						<td>${cashback}</td>
+					</tr>
+				`;
+				$('#board').append(tr);
+			});
+		}
+
+		$(function() {
+			showStatus();
+				
+			oc.EventDeleteFromBlacklist().watch(function(err, evt) {
+				if (!err) showStatus();
+				else console.error(err);
+			});
+			oc.EventInserIntoBlacklist().watch(function(err, evt) {
+				if (!err) showStatus();
+				else console.error(err);
+			});
+			oc.EventSetCashback().watch(function(err, evt) {
+				if (!err) { toastr.info(`${evt.args.addr}의 캐시백 요율이 ${evt.args.rate}로 설정되었습니다.`); showStatus(); }
+				else console.error(err);
+			});
+
+//			$("input[type=button]").click(function() {
+			$(document).on("click", "input[type=button]", function() {
+				let account = $(this).attr('account');
+				let owner = oc.owner.call();
+				console.log(account);
+
+				if ($(this).val() == "블랙리스트 해제") {
+					//oc.deleteBlacklist.sendTransaction(account, { from: owner, gas: 1000000 });
+					oc.deleteBlacklist(
+						account,  /* 함수 인자값 */
+						{ from: owner, gas: 1000000 }, /* 트랜잭션 처리에 필요한 값 */
+						function(err, res) { /* 비동기 처리에서 사용할 콜백 함수를 정의 */
+							if (!err) {
+								toastr.info("블랙리스트 삭제 성공", res);
+							} else {
+								toastr.error("블랙리스트 삭제 실패", err);
+							}
+						}
+					);
+				} else if ($(this).val() == "블랙리스트 설정") {
+					// oc.insertBlacklist(account, ...
+					oc.insertBlacklist.sendTransaction(
+						account, 
+						{ from: owner, gas: 1000000 }, 
+						function(err, res) { /* 비동기 처리에서 사용할 콜백 함수를 정의 */
+							if (!err) {
+								toastr.info("블랙리스트 설정 성공", res);
+							} else {
+								toastr.error("블랙리스트 설정 실패", err);
+							}
+						}
+					);
+				} else if ($(this).val() == "변경") {
+					let password = prompt("패스워드를 입력하세요.");
+					if (!web3.personal.unlockAccount(account, password)) {
+						toastr.error("패스워드가 일치하지 않습니다.");
+						return;
+					}
+
+					let cashbackRate = $('input[type=number][account='+ account +']').val();
+					oc.setCashbackRate.sendTransaction(
+						cashbackRate, 
+						{ from: account, gas: 1000000 }, 
+						function(err, res) {
+							if (!err) toastr.info("캐시백 요율 변경 성공", res);
+							else      toastr.error("캐시백 요율 변경 실패", err);
+						}
+					);
+				}
+			});
+		});
+	</script>
+</body>
+</html>
